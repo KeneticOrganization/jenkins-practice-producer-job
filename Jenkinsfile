@@ -33,7 +33,28 @@ pipeline {
         
         stage('Produce') {
             steps {
-                echo 'Produce $MESSAGE_JSON'
+                sh '''
+                    topic=$(echo "$MESSAGE_JSON" | jq -r '.topic')
+                    echo $topic
+                    
+                    echo "$MESSAGE_JSON" | jq -c '.message[]' | while read -r msg; do
+                      key=$(echo "$msg" | jq -r '.key')
+                      value=$(echo "$msg" | jq -r '.value')
+                      
+                    echo "$(jq -n \
+                          --arg key "$key" \
+                          --arg value "$value" \
+                          '{"value": {"type": "JSON", "data": {"key" : $key , "value" : $value }}}')"
+                    
+                      curl -X POST -H "Content-Type: application/json" \
+                        -H "Authorization: Basic $API_KEY" \
+                        "$REST_ENDPOINT/kafka/v3/clusters/$CLUSTER_ID/topics/$topic/records" -d \
+                        "$(jq -n \
+                          --arg key "$key" \
+                          --arg value "$value" \
+                          '{"value": {"type": "JSON", "data": {"key" : $key , "value" : $value }}}')"
+                    done
+                '''
             }
         }
     }
